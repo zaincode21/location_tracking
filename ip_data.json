@@ -1,0 +1,31 @@
+{
+  "2c0f:eb68:62a:b000:6f3c:fd9a:c6c7:c465": {
+    "continent": "Africa",
+    "continent_code": "AF",
+    "country": "Rwanda",
+    "country_code": "RW",
+    "region": "Kigali City",
+    "region_code": "01",
+    "city": "Kigali",
+    "latitude": -1.9705786,
+    "longitude": 30.1044288,
+    "is_eu": false,
+    "postal": "250",
+    "calling_code": "250",
+    "capital": "Kigali",
+    "borders": "BI,CD,TZ,UG",
+    "connection": {
+      "asn": 36924,
+      "org": "Gva Rwanda LTD",
+      "isp": "Gva Cote D ivoire SAS",
+      "domain": "gva.africa"
+    },
+    "timezone": {
+      "id": "Africa/Kigali",
+      "abbr": "CAT",
+      "is_dst": false,
+      "offset": 7200,
+      "utc": "+02:00"
+    }
+  }
+}
