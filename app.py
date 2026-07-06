@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 
-HOST = os.getenv("HOST", "127.0.0.1")
+HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
 BASE_DIR = Path(__file__).parent
 DATA_FILE = Path(os.getenv("IP_DATA_FILE", BASE_DIR / "ip_data.json"))

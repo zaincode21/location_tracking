@@ -35,6 +35,20 @@ POST /api/audit-logs
 GET  /api/audit-logs
 ```
 
+## Deploy on Render
+
+1. Push this repo to GitHub (remote: `location_tracking`).
+2. In the [Render Dashboard](https://dashboard.render.com/), click **New +** → **Blueprint**.
+3. Connect the GitHub repo. Render reads `render.yaml` and creates the web service.
+4. After deploy, open `https://<your-service>.onrender.com/my-location`.
+
+Render sets `PORT` automatically and terminates HTTPS at the edge, so browser geolocation works on the public URL.
+
+**Notes for production:**
+
+- Audit logs are written to `audit_logs.jsonl` on the instance disk; they reset when the service redeploys.
+- IP fallback uses the sample record in `ip_data.json` (not the visitor's real IP).
+
 ## HTTPS
 
 For local development, browsers allow geolocation on `127.0.0.1`.
