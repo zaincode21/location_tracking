@@ -202,13 +202,28 @@ LOCATION_HTML = """<!doctype html>
         `;
       }
 
+      async function readJsonResponse(response) {
+        const body = await response.text();
+        try {
+          return JSON.parse(body);
+        } catch (error) {
+          throw new Error(
+            `Expected JSON from ${response.url}, got HTTP ${response.status}: ${body.slice(0, 120)}`
+          );
+        }
+      }
+
       async function postJson(url, payload) {
         const response = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
-        return response.json();
+        const data = await readJsonResponse(response);
+        if (!response.ok) {
+          throw new Error(data.message || `Request failed with HTTP ${response.status}`);
+        }
+        return data;
       }
 
       async function logEvent(eventType, details) {
@@ -272,7 +287,11 @@ LOCATION_HTML = """<!doctype html>
 
       async function getIpLocation() {
         const response = await fetch("/api/location/ip");
-        return response.json();
+        const data = await readJsonResponse(response);
+        if (!response.ok) {
+          throw new Error(data.message || `Request failed with HTTP ${response.status}`);
+        }
+        return data;
       }
 
       async function sendGpsLocation(position) {
@@ -296,39 +315,58 @@ LOCATION_HTML = """<!doctype html>
       }
 
       requestButton.addEventListener("click", async () => {
-        if (!window.isSecureContext) {
-          summary.textContent = "Warning: geolocation requires HTTPS in production. Localhost is allowed for development.";
-        }
-
-        if (!navigator.geolocation) {
-          await useIpFallback("Geolocation is not supported by this browser.");
-          return;
-        }
-
-        summary.textContent = "Requesting GPS permission...";
-        navigator.geolocation.getCurrentPosition(
-          async (position) => {
-            const consent = saveConsent("granted");
-            await logEvent("permission-granted", { consent });
-            const precise = await sendGpsLocation(position);
-            const approximate = await getIpLocation();
-            renderLocation(precise, approximate);
-          },
-          async (error) => {
-            await useIpFallback(error.message);
-          },
-          {
-            enableHighAccuracy: true,
-            timeout: 15000,
-            maximumAge: 0
+        try {
+          if (!window.isSecureContext) {
+            summary.textContent = "Warning: geolocation requires HTTPS in production. Localhost is allowed for development.";
           }
-        );
+
+          if (!navigator.geolocation) {
+            await useIpFallback("Geolocation is not supported by this browser.");
+            return;
+          }
+
+          summary.textContent = "Requesting GPS permission...";
+          navigator.geolocation.getCurrentPosition(
+            async (position) => {
+              try {
+                const consent = saveConsent("granted");
+                await logEvent("permission-granted", { consent });
+                const precise = await sendGpsLocation(position);
+                const approximate = await getIpLocation();
+                renderLocation(precise, approximate);
+              } catch (error) {
+                summary.textContent = error.message;
+              }
+            },
+            async (error) => {
+              try {
+                await useIpFallback(error.message);
+              } catch (fallbackError) {
+                summary.textContent = fallbackError.message;
+              }
+            },
+            {
+              enableHighAccuracy: true,
+              timeout: 15000,
+              maximumAge: 0
+            }
+          );
+        } catch (error) {
+          summary.textContent = error.message;
+        }
       });
 
       logsButton.addEventListener("click", async () => {
-        const response = await fetch("/api/audit-logs");
-        const payload = await response.json();
-        auditLogs.textContent = JSON.stringify(payload, null, 2);
+        try {
+          const response = await fetch("/api/audit-logs");
+          const payload = await readJsonResponse(response);
+          if (!response.ok) {
+            throw new Error(payload.message || `Request failed with HTTP ${response.status}`);
+          }
+          auditLogs.textContent = JSON.stringify(payload, null, 2);
+        } catch (error) {
+          auditLogs.textContent = error.message;
+        }
       });
 
       renderConsent();
@@ -439,19 +477,35 @@ def load_ip_data():
     return data
 
 
+def normalize_path(path):
+    if path != "/" and path.endswith("/"):
+        return path.rstrip("/")
+    return path
+
+
 class LocationHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        parsed_url = urlparse(self.path)
+        path = normalize_path(urlparse(self.path).path)
 
-        if parsed_url.path in ("/", "/my-location"):
+        if path in ("/", "/my-location"):
             self._send_html(render_location_page())
             return
 
-        if parsed_url.path == "/api/location/ip":
+        if path == "/api/health":
+            self._send_json(
+                {
+                    "success": True,
+                    "service": "privacy-safe-location-service",
+                    "status": "ok",
+                }
+            )
+            return
+
+        if path == "/api/location/ip":
             self._handle_ip_location()
             return
 
-        if parsed_url.path == "/api/audit-logs":
+        if path == "/api/audit-logs":
             self._send_json({"success": True, "logs": read_audit_logs()})
             return
 
@@ -461,13 +515,13 @@ class LocationHandler(BaseHTTPRequestHandler):
         )
 
     def do_POST(self):
-        parsed_url = urlparse(self.path)
+        path = normalize_path(urlparse(self.path).path)
 
-        if parsed_url.path == "/api/location":
+        if path == "/api/location":
             self._handle_precise_location()
             return
 
-        if parsed_url.path == "/api/audit-logs":
+        if path == "/api/audit-logs":
             self._handle_audit_log()
             return
 
