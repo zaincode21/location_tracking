@@ -18,6 +18,330 @@ EXAMPLE_IP = "2c0f:eb68:62a:b000:6f3c:fd9a:c6c7:c465"
 IP_ACCURACY_METERS = 25000
 
 
+# ---------------------------------------------------------------------------
+# OpenAPI 3.0 specification
+# ---------------------------------------------------------------------------
+
+OPENAPI_SPEC = {
+    "openapi": "3.0.3",
+    "info": {
+        "title": "Privacy-Safe Location Service",
+        "description": (
+            "Resolves device GPS coordinates (after user permission) or falls back "
+            "to approximate IP-based geolocation. Logs consent events for auditing."
+        ),
+        "version": "1.0.0",
+    },
+    "servers": [{"url": "/"}],
+    "tags": [
+        {"name": "location", "description": "Location resolution endpoints"},
+        {"name": "audit",    "description": "Consent audit log endpoints"},
+        {"name": "system",   "description": "Service health"},
+    ],
+    "paths": {
+        "/api/health": {
+            "get": {
+                "tags": ["system"],
+                "summary": "Health check",
+                "description": "Returns a simple status object confirming the service is running.",
+                "operationId": "getHealth",
+                "responses": {
+                    "200": {
+                        "description": "Service is healthy",
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/HealthResponse"},
+                                "example": {
+                                    "success": True,
+                                    "service": "privacy-safe-location-service",
+                                    "status": "ok",
+                                },
+                            }
+                        },
+                    }
+                },
+            }
+        },
+        "/api/location/ip": {
+            "get": {
+                "tags": ["location"],
+                "summary": "Get approximate IP-based location",
+                "description": (
+                    "Returns city, region, country, latitude/longitude, and ISP info "
+                    "derived from the example IP record in ip_data.json. "
+                    "No user permission is required."
+                ),
+                "operationId": "getIpLocation",
+                "responses": {
+                    "200": {
+                        "description": "Approximate location resolved",
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/ApproximateLocationResponse"}
+                            }
+                        },
+                    },
+                    "500": {
+                        "description": "IP record not found or data file error",
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/ErrorResponse"}
+                            }
+                        },
+                    },
+                },
+            }
+        },
+        "/api/location": {
+            "post": {
+                "tags": ["location"],
+                "summary": "Submit precise GPS location",
+                "description": (
+                    "Accepts GPS coordinates obtained from the browser Geolocation API "
+                    "after the user grants permission. Returns a structured location object."
+                ),
+                "operationId": "postGpsLocation",
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {"$ref": "#/components/schemas/GpsLocationRequest"},
+                            "example": {
+                                "latitude": 37.7749,
+                                "longitude": -122.4194,
+                                "accuracy_meters": 10,
+                                "altitude": None,
+                                "heading": None,
+                                "speed": None,
+                                "timestamp": "2024-01-15T12:00:00.000Z",
+                            },
+                        }
+                    },
+                },
+                "responses": {
+                    "200": {
+                        "description": "Precise location accepted",
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/PreciseLocationResponse"}
+                            }
+                        },
+                    },
+                    "400": {
+                        "description": "Missing required fields or invalid JSON",
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/ErrorResponse"}
+                            }
+                        },
+                    },
+                },
+            }
+        },
+        "/api/audit-logs": {
+            "get": {
+                "tags": ["audit"],
+                "summary": "List audit log events",
+                "description": "Returns all consent events stored in audit_logs.jsonl.",
+                "operationId": "getAuditLogs",
+                "responses": {
+                    "200": {
+                        "description": "Audit log entries",
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/AuditLogsResponse"}
+                            }
+                        },
+                    }
+                },
+            },
+            "post": {
+                "tags": ["audit"],
+                "summary": "Append an audit log event",
+                "description": (
+                    "Records a permission-granted or permission-denied consent event. "
+                    "Called automatically by the browser UI when the user makes a decision."
+                ),
+                "operationId": "postAuditLog",
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {"$ref": "#/components/schemas/AuditLogRequest"},
+                            "example": {
+                                "event_type": "permission-granted",
+                                "details": {"source": "browser-ui"},
+                            },
+                        }
+                    },
+                },
+                "responses": {
+                    "201": {
+                        "description": "Event recorded",
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/AuditLogCreatedResponse"}
+                            }
+                        },
+                    },
+                    "400": {
+                        "description": "Invalid event_type or malformed JSON",
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/ErrorResponse"}
+                            }
+                        },
+                    },
+                },
+            },
+        },
+    },
+    "components": {
+        "schemas": {
+            "HealthResponse": {
+                "type": "object",
+                "properties": {
+                    "success": {"type": "boolean", "example": True},
+                    "service": {"type": "string", "example": "privacy-safe-location-service"},
+                    "status":  {"type": "string", "example": "ok"},
+                },
+            },
+            "GpsLocationRequest": {
+                "type": "object",
+                "required": ["latitude", "longitude", "accuracy_meters"],
+                "properties": {
+                    "latitude":        {"type": "number", "format": "double", "example": 37.7749},
+                    "longitude":       {"type": "number", "format": "double", "example": -122.4194},
+                    "accuracy_meters": {"type": "number", "format": "double", "example": 10},
+                    "altitude":        {"type": "number", "format": "double", "nullable": True},
+                    "heading":         {"type": "number", "format": "double", "nullable": True},
+                    "speed":           {"type": "number", "format": "double", "nullable": True},
+                    "timestamp":       {"type": "string", "format": "date-time"},
+                },
+            },
+            "PreciseLocationResponse": {
+                "type": "object",
+                "properties": {
+                    "success":         {"type": "boolean"},
+                    "label":           {"type": "string", "example": "Precise Location"},
+                    "source":          {"type": "string", "example": "device-gps"},
+                    "latitude":        {"type": "number"},
+                    "longitude":       {"type": "number"},
+                    "accuracy_meters": {"type": "number"},
+                    "altitude":        {"type": "number", "nullable": True},
+                    "heading":         {"type": "number", "nullable": True},
+                    "speed":           {"type": "number", "nullable": True},
+                    "timestamp":       {"type": "string", "format": "date-time"},
+                    "message":         {"type": "string"},
+                },
+            },
+            "ConnectionInfo": {
+                "type": "object",
+                "properties": {
+                    "asn":    {"type": "string"},
+                    "org":    {"type": "string"},
+                    "isp":    {"type": "string"},
+                    "domain": {"type": "string"},
+                },
+            },
+            "ApproximateLocationResponse": {
+                "type": "object",
+                "properties": {
+                    "success":         {"type": "boolean"},
+                    "label":           {"type": "string", "example": "Approximate Location"},
+                    "source":          {"type": "string", "example": "ip-geolocation"},
+                    "ip":              {"type": "string"},
+                    "city":            {"type": "string"},
+                    "region":          {"type": "string"},
+                    "country":         {"type": "string"},
+                    "latitude":        {"type": "number"},
+                    "longitude":       {"type": "number"},
+                    "accuracy_meters": {"type": "number", "example": 25000},
+                    "connection":      {"$ref": "#/components/schemas/ConnectionInfo"},
+                    "timestamp":       {"type": "string", "format": "date-time"},
+                    "message":         {"type": "string"},
+                },
+            },
+            "AuditLogRequest": {
+                "type": "object",
+                "required": ["event_type"],
+                "properties": {
+                    "event_type": {
+                        "type": "string",
+                        "enum": ["permission-granted", "permission-denied"],
+                    },
+                    "details": {"type": "object", "additionalProperties": True},
+                },
+            },
+            "AuditLogEntry": {
+                "type": "object",
+                "properties": {
+                    "id":         {"type": "string", "format": "date-time"},
+                    "event_type": {"type": "string"},
+                    "timestamp":  {"type": "string", "format": "date-time"},
+                    "details":    {"type": "object", "additionalProperties": True},
+                },
+            },
+            "AuditLogCreatedResponse": {
+                "type": "object",
+                "properties": {
+                    "success": {"type": "boolean"},
+                    "event":   {"$ref": "#/components/schemas/AuditLogEntry"},
+                },
+            },
+            "AuditLogsResponse": {
+                "type": "object",
+                "properties": {
+                    "success": {"type": "boolean"},
+                    "logs": {
+                        "type": "array",
+                        "items": {"$ref": "#/components/schemas/AuditLogEntry"},
+                    },
+                },
+            },
+            "ErrorResponse": {
+                "type": "object",
+                "properties": {
+                    "success": {"type": "boolean", "example": False},
+                    "message": {"type": "string"},
+                },
+            },
+        }
+    },
+}
+
+
+# ---------------------------------------------------------------------------
+# Swagger UI page (loads spec from /api/openapi.json)
+# ---------------------------------------------------------------------------
+
+SWAGGER_HTML = """<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Location Service – API Docs</title>
+    <link rel="stylesheet"
+          href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+  </head>
+  <body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+    <script>
+      SwaggerUIBundle({
+        url: "/api/openapi.json",
+        dom_id: "#swagger-ui",
+        presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
+        layout: "BaseLayout",
+        deepLinking: true,
+        tryItOutEnabled: true,
+      });
+    </script>
+  </body>
+</html>
+"""
+
+
 LOCATION_HTML = """<!doctype html>
 <html lang="en">
   <head>
@@ -491,6 +815,14 @@ class LocationHandler(BaseHTTPRequestHandler):
             self._send_html(render_location_page())
             return
 
+        if path == "/docs":
+            self._send_html(SWAGGER_HTML)
+            return
+
+        if path == "/api/openapi.json":
+            self._send_json(OPENAPI_SPEC)
+            return
+
         if path == "/api/health":
             self._send_json(
                 {
@@ -631,8 +963,10 @@ def run_server():
 
     base_url = f"{protocol}://{HOST}:{PORT}"
     print(f"Location service running at {base_url}/my-location")
-    print(f"IP fallback endpoint: {base_url}/api/location/ip")
-    print(f"Audit logs endpoint: {base_url}/api/audit-logs")
+    print(f"Swagger UI (API docs):       {base_url}/docs")
+    print(f"OpenAPI spec (JSON):         {base_url}/api/openapi.json")
+    print(f"IP fallback endpoint:        {base_url}/api/location/ip")
+    print(f"Audit logs endpoint:         {base_url}/api/audit-logs")
     server.serve_forever()
 
 
