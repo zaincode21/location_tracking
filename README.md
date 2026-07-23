@@ -35,6 +35,17 @@ POST /api/audit-logs
 GET  /api/audit-logs
 ```
 
+## Go backend client
+
+A ready-to-use HTTP client lives in [`clients/locationclient`](clients/locationclient).
+
+```go
+client := locationclient.New("https://<your-service>.onrender.com")
+loc, err := client.GetIPLocation(context.Background())
+```
+
+See that package README for full usage.
+
 ## Deploy on Render
 
 1. Push this repo to GitHub (remote: `location_tracking`).
